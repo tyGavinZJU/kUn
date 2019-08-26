@@ -12,6 +12,7 @@
 #include "geometry.h"
 
 #include <vector>
+#define OBS_SPACE 4
 struct FeedBack{
     std::vector<double> state;
     double reward;
@@ -37,11 +38,12 @@ private:
     UDPSender* vision_sender;
     UDPReceiver* handle_receiver;
 private:
-    void setBallAndRobot(double,double,int,bool,double,double,double dir = 0,bool turnon = true);
+    void setBallAndRobot(const CGeoPoint&,const CVector&,int,bool,double,double,double dir = 0,bool turnon = true);
 private:
     void getState(FeedBack& fb);
     void sendAction(const Action& action);
     CGeoPoint target;
+    CVector velocity;
     int cycle;
     FeedBack feedback;
 private:

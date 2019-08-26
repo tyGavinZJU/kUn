@@ -5,7 +5,7 @@
 #include "KunDebugEngine.h"
 namespace {
 bool outside(const CGeoPoint& pos){
-    return pos.x()>4||pos.x()<-4||pos.y()>3||pos.y()<-3;
+    return pos.x()>6||pos.x()<-6||pos.y()>4.5||pos.y()<-4.5;
 }
 double remap(const unsigned int origin_min,const unsigned int origin_max,const double target_min,const double target_max,const double input){
     const double a = double(origin_min);
@@ -46,7 +46,7 @@ Environment::Environment()
 //    ,dm_blue_left(new DecisionPlugin(false,false))
     ,c2s_blue(new Cmd2Sim(false))
     ,vision_sender(nullptr){
-    feedback.state.resize(2);
+    feedback.state.resize(OBS_SPACE);
     declare_publish("sim_signal");
     declare_publish("sim_packet");
     declare_publish("zss_cmds");
@@ -88,15 +88,18 @@ FeedBack Environment::reset(){
     static std::random_device rd;
     static std::vector<double> static_action{0.0,0.0,0.0};
 
-    target.setX(remap(rd.min(),rd.max(),-2.0,2.0,double(rd())));
-    target.setY(remap(rd.min(),rd.max(),-2.0,2.0,double(rd())));
+    target.setX(remap(rd.min(),rd.max(),-1.0,1.0,double(rd())));
+    target.setY(remap(rd.min(),rd.max(),-1.0,1.0,double(rd())));
+    velocity.setVector(remap(rd.min(),rd.max(),-3.0,3.0,double(rd()))
+                       ,remap(rd.min(),rd.max(),-3.0,3.0,double(rd())));
 //    target.fill(0,0);
-    DebugEngine::instance()->gui_debug_msg(CGeoPoint(100,100),QString("target : %1 %2").arg(target.x()).arg(-target.y()).toLatin1(),COLOR_RED);
-    DebugEngine::instance()->gui_debug_msg(CGeoPoint(target.x()*100,-target.y()*100),"TARGET");
-    DebugEngine::instance()->gui_debug_x(CGeoPoint(target.x()*100,-target.y()*100),COLOR_GRAY);
-    DebugEngine::instance()->send(true);
-    setBallAndRobot(target.x(),target.y(),0,false,0,0);
+//    DebugEngine::instance()->gui_debug_msg(CGeoPoint(100,100),QString("target : %1 %2").arg(target.x()).arg(-target.y()).toLatin1(),COLOR_RED);
+//    DebugEngine::instance()->gui_debug_msg(CGeoPoint(target.x()*100,-target.y()*100),"TARGET");
+//    DebugEngine::instance()->gui_debug_x(CGeoPoint(target.x()*100,-target.y()*100),COLOR_GRAY);
+//    DebugEngine::instance()->send(true);
+    setBallAndRobot(target,velocity,0,false,0,0);
     cycle = 0;
+    std::this_thread::sleep_for(std::chrono::microseconds(10000));
     return this->step(static_action);
 }
 void Environment::render(){}
@@ -116,7 +119,7 @@ FeedBack Environment::step(const std::vector<double>& arr){
     return feedback;
 }
 void Environment::run(){}
-void Environment::setBallAndRobot(double bx,double by,int id,bool team,double x,double y,double dir,bool turnon){
+void Environment::setBallAndRobot(const CGeoPoint& p,const CVector& v,int id,bool team,double x,double y,double dir,bool turnon){
     static ZSData data;
     static grSim_Packet packet;
     auto replacement = packet.mutable_replacement();
@@ -129,10 +132,10 @@ void Environment::setBallAndRobot(double bx,double by,int id,bool team,double x,
     robot->set_turnon(turnon);
 
     auto ball = replacement->mutable_ball();
-    ball->set_x(bx);
-    ball->set_y(by);
-    ball->set_vx(0);
-    ball->set_vy(0);
+    ball->set_x(p.x());
+    ball->set_y(p.y());
+    ball->set_vx(v.x());
+    ball->set_vy(v.y());
 
     data.resize(packet.ByteSize());
     packet.SerializeToArray(data.ptr(),packet.ByteSize());
@@ -153,14 +156,20 @@ void Environment::getState(FeedBack& feedback){
     }
     auto robot = frame.robots_blue(0);
     pos.fill(robot.x()/1000.0,robot.y()/1000.0);
+    target.fill(frame.ball().x()/1000.0,frame.ball().y()/1000.0);
+    velocity.setVector(frame.ball().vel_x()/1000.0,frame.ball().vel_y()/1000.0);
     dir = robot.orientation();
     auto target_dir = (target-pos).dir();
     auto target_dist = (target-pos).mod();
     auto target_dist_max = (target-CGeoPoint(0,0)).mod();
-    feedback.reward = (-target_dist)/target_dist_max*2 + (target_dist < limitRange(target_dist_max*0.2,0.1,0.3) ? 2000 : 0);
+    auto velocity_dir = velocity.dir();
+    auto velocity_mod = velocity.mod();
+    feedback.reward = (-target_dist)/target_dist_max*2 + (target_dist < limitRange(target_dist_max*0.2,0.1,0.3) ? 500 : 0);
     feedback.done = (cycle > 500 || outside(pos) || target_dist < limitRange(target_dist_max*0.2,0.1,0.3));
     feedback.state[0] = target_dist/7.0;
     feedback.state[1] = (target_dir-dir)/M_PI;
+    feedback.state[2] = (velocity_dir-dir)/M_PI;
+    feedback.state[3] = velocity_mod/4.0;
 }
 void Environment::sendAction(const Action& action){
     static ZSData data;

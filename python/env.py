@@ -12,7 +12,7 @@ class Env(gym.Env):
         self.low_action = np.array([-1, -1, -1])
         self.high_action = np.array([1, 1, 1])
         self.action_space = spaces.Box(low=self.low_action, high=self.high_action, dtype=np.float32)
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
         self.environment = zss_kun.Environment(port)
         self.environment.start_all()
         # zss_kun.initBP()

@@ -12,7 +12,6 @@ int main(){
     env.reset();
     while(true){
         std::this_thread::sleep_for(std::chrono::microseconds(10000));
-        env.reset();
         env.step(temp);
     }
 	return 0;
